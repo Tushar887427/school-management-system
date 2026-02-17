@@ -26,6 +26,20 @@ PHP School management system developed for schools or small institutes. You can 
   13. Single login
   14. Dark theme support
   15. Multi-Language Support <small style="color: orange;">(new)</small>
+  16. Android APK Build via GitHub Actions <small style="color: orange;">(new)</small>
+
+## 📱 BUILD ANDROID APK
+
+Want to convert this web application into an Android app? Check out our comprehensive guide:
+
+**[📖 APK Build Guide](docs/APK_BUILD_GUIDE.md)** - Complete step-by-step instructions for:
+- Setting up automated APK builds with GitHub Actions
+- Generating and configuring Android signing certificates
+- Building APKs locally on your machine
+- Troubleshooting common issues
+- Publishing to Google Play Store
+
+The guide includes everything you need to automatically build and release Android APKs using Apache Cordova and GitHub Actions workflows.
 
 ## 🦤 SCREENSHOTS
 
