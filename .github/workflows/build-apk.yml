@@ -246,7 +246,7 @@ jobs:
           cordova build android --verbose
           
       - name: Build signed APK (if secrets available)
-        if: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
+        if: secrets.ANDROID_KEYSTORE_BASE64 != ''
         run: |
           cd cordova-app
           
