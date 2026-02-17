@@ -26,6 +26,7 @@ PHP School management system developed for schools or small institutes. You can 
   13. Single login
   14. Dark theme support
   15. Multi-Language Support <small style="color: orange;">(new)</small>
+  16. **Android APK Build** <small style="color: orange;">(new)</small>
 
 ## 🦤 SCREENSHOTS
 
@@ -118,6 +119,28 @@ PHP School management system developed for schools or small institutes. You can 
 <b>Step-4 :</b> Run the application <br>
    <b> visit on the url : <i>http://localhost/school-management-system</i> </b>
    <br> Visit to the given URL to see the running website
+
+## 📱 BUILD ANDROID APK
+
+You can now build this school management system as an Android APK!
+
+### Quick Start (Via GitHub Actions)
+1. Go to **Actions** tab on GitHub
+2. Select **Build Android APK** workflow
+3. Click **Run workflow**
+4. Wait 8-12 minutes for the build to complete
+5. Download the APK from **Artifacts** or **Releases**
+
+### Local Build
+```bash
+./scripts/setup-cordova.sh
+```
+
+### 📖 Documentation
+- **[How to Trigger APK Build](docs/HOW_TO_TRIGGER_BUILD.md)** - Quick guide to build APK via GitHub Actions
+- **[Complete APK Build Guide](docs/APK_BUILD_GUIDE.md)** - Detailed instructions for both cloud and local builds
+
+**Important:** The APK requires a hosted PHP backend server. The app connects to your server via URL configuration.
 
 ## 🔐 Emails and Passwords
 
