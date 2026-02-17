@@ -1,0 +1,31 @@
+# Cordova build artifacts
+cordova-app/
+*.apk
+*.aab
+
+# Android
+platforms/
+plugins/
+*.keystore
+build.json
+
+# Node
+node_modules/
+npm-debug.log
+package-lock.json
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary files
+/tmp/
+*.tmp
+*.log

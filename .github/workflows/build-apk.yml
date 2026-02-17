@@ -1,0 +1,330 @@
+name: Build Android APK
+
+on:
+  push:
+    branches:
+      - main
+      - master
+      - copilot/**
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - main
+      - master
+
+jobs:
+  build:
+    name: Build Android APK
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          
+      - name: Setup Java JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+          
+      - name: Install Cordova
+        run: |
+          npm install -g cordova@latest
+          cordova telemetry off
+          
+      - name: Create Cordova project
+        run: |
+          # Create Cordova project
+          cordova create cordova-app com.schoolmanagement.app "School Management System"
+          cd cordova-app
+          
+          # Add Android platform
+          cordova platform add android@latest
+          
+          # Copy web files to Cordova www directory
+          rm -rf www/*
+          cp -r ../index.php ../index.js ../login.php ../forgotPassword.php ../about-us.php www/ || true
+          cp -r ../admin_panel ../teacher_panel ../student_panel ../owner_panel www/ || true
+          cp -r ../shared ../css ../js ../images ../assets ../phpmailer www/ || true
+          cp -r ../errors www/ || true
+          
+          # Create a simple index.html that loads the PHP backend
+          cat > www/index.html << 'EOF'
+          <!DOCTYPE html>
+          <html>
+          <head>
+              <meta charset="utf-8">
+              <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+              <meta http-equiv="Content-Security-Policy" content="default-src * 'unsafe-inline' 'unsafe-eval' data: gap: content:">
+              <title>School Management System</title>
+              <link rel="stylesheet" href="css/login-form-style.css">
+              <style>
+                  body {
+                      margin: 0;
+                      padding: 0;
+                      font-family: Arial, sans-serif;
+                  }
+                  .config-container {
+                      padding: 20px;
+                      max-width: 600px;
+                      margin: 50px auto;
+                      background: #f5f5f5;
+                      border-radius: 10px;
+                      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+                  }
+                  .config-container h2 {
+                      color: #333;
+                      margin-bottom: 20px;
+                  }
+                  .input-group {
+                      margin-bottom: 15px;
+                  }
+                  .input-group label {
+                      display: block;
+                      margin-bottom: 5px;
+                      color: #555;
+                      font-weight: bold;
+                  }
+                  .input-group input {
+                      width: 100%;
+                      padding: 10px;
+                      border: 1px solid #ddd;
+                      border-radius: 5px;
+                      box-sizing: border-box;
+                  }
+                  .btn {
+                      background: #4CAF50;
+                      color: white;
+                      padding: 12px 30px;
+                      border: none;
+                      border-radius: 5px;
+                      cursor: pointer;
+                      font-size: 16px;
+                      width: 100%;
+                  }
+                  .btn:hover {
+                      background: #45a049;
+                  }
+                  .info {
+                      background: #e3f2fd;
+                      padding: 15px;
+                      border-radius: 5px;
+                      margin-bottom: 20px;
+                      border-left: 4px solid #2196F3;
+                  }
+                  iframe {
+                      width: 100%;
+                      height: calc(100vh - 60px);
+                      border: none;
+                      display: none;
+                  }
+                  .header {
+                      background: #2196F3;
+                      color: white;
+                      padding: 15px 20px;
+                      display: none;
+                  }
+                  .header button {
+                      background: white;
+                      color: #2196F3;
+                      border: none;
+                      padding: 8px 15px;
+                      border-radius: 3px;
+                      cursor: pointer;
+                  }
+              </style>
+          </head>
+          <body>
+              <div class="config-container" id="configContainer">
+                  <h2>🎓 School Management System</h2>
+                  <div class="info">
+                      <strong>Note:</strong> This app requires a backend server. Please enter your server URL below.
+                  </div>
+                  <div class="input-group">
+                      <label for="serverUrl">Server URL:</label>
+                      <input type="url" id="serverUrl" placeholder="https://your-server.com" value="">
+                  </div>
+                  <button class="btn" onclick="saveAndLoad()">Connect to Server</button>
+              </div>
+              
+              <div class="header" id="header">
+                  <button onclick="showConfig()">⚙️ Change Server</button>
+              </div>
+              <iframe id="appFrame"></iframe>
+              
+              <script>
+                  // Load saved server URL
+                  const savedUrl = localStorage.getItem('serverUrl');
+                  if (savedUrl) {
+                      document.getElementById('serverUrl').value = savedUrl;
+                      loadApp(savedUrl);
+                  }
+                  
+                  function saveAndLoad() {
+                      const url = document.getElementById('serverUrl').value.trim();
+                      if (!url) {
+                          alert('Please enter a server URL');
+                          return;
+                      }
+                      
+                      // Remove trailing slash
+                      const cleanUrl = url.replace(/\/$/, '');
+                      
+                      localStorage.setItem('serverUrl', cleanUrl);
+                      loadApp(cleanUrl);
+                  }
+                  
+                  function loadApp(url) {
+                      document.getElementById('configContainer').style.display = 'none';
+                      document.getElementById('header').style.display = 'block';
+                      document.getElementById('appFrame').style.display = 'block';
+                      document.getElementById('appFrame').src = url;
+                  }
+                  
+                  function showConfig() {
+                      document.getElementById('configContainer').style.display = 'block';
+                      document.getElementById('header').style.display = 'none';
+                      document.getElementById('appFrame').style.display = 'none';
+                  }
+              </script>
+          </body>
+          </html>
+          EOF
+          
+          # Copy login form style
+          cp ../login-form-style.css www/css/ || true
+          
+      - name: Configure Cordova
+        run: |
+          cd cordova-app
+          
+          # Create config.xml
+          cat > config.xml << 'EOF'
+          <?xml version='1.0' encoding='utf-8'?>
+          <widget id="com.schoolmanagement.app" version="1.0.0" xmlns="http://www.w3.org/ns/widgets" xmlns:cdv="http://cordova.apache.org/ns/1.0">
+              <name>School Management</name>
+              <description>
+                  A school management system for managing students, teachers, and administrative tasks.
+              </description>
+              <author email="admin@schoolmanagement.com" href="https://github.com/Tushar887427/school-management-system">
+                  School Management Team
+              </author>
+              <content src="index.html" />
+              <access origin="*" />
+              <allow-intent href="http://*/*" />
+              <allow-intent href="https://*/*" />
+              <allow-intent href="tel:*" />
+              <allow-intent href="sms:*" />
+              <allow-intent href="mailto:*" />
+              <allow-intent href="geo:*" />
+              <platform name="android">
+                  <allow-intent href="market:*" />
+                  <preference name="android-minSdkVersion" value="24" />
+                  <preference name="android-targetSdkVersion" value="33" />
+                  <icon density="ldpi" src="res/icon/android/ldpi.png" />
+                  <icon density="mdpi" src="res/icon/android/mdpi.png" />
+                  <icon density="hdpi" src="res/icon/android/hdpi.png" />
+                  <icon density="xhdpi" src="res/icon/android/xhdpi.png" />
+                  <icon density="xxhdpi" src="res/icon/android/xxhdpi.png" />
+                  <icon density="xxxhdpi" src="res/icon/android/xxxhdpi.png" />
+              </platform>
+              <preference name="DisallowOverscroll" value="true" />
+              <preference name="Orientation" value="default" />
+              <preference name="SplashScreenDelay" value="0" />
+              <preference name="BackgroundColor" value="0xffffffff" />
+          </widget>
+          EOF
+          
+      - name: Build unsigned APK
+        run: |
+          cd cordova-app
+          cordova build android --verbose
+          
+      - name: Build signed APK (if secrets available)
+        if: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
+        run: |
+          cd cordova-app
+          
+          # Decode keystore
+          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > release.keystore
+          
+          # Create build.json for signing
+          cat > build.json << EOF
+          {
+            "android": {
+              "release": {
+                "keystore": "release.keystore",
+                "storePassword": "${{ secrets.ANDROID_KEYSTORE_PASSWORD }}",
+                "alias": "${{ secrets.ANDROID_KEY_ALIAS }}",
+                "password": "${{ secrets.ANDROID_KEY_PASSWORD }}",
+                "keystoreType": ""
+              }
+            }
+          }
+          EOF
+          
+          # Build signed APK
+          cordova build android --release --buildConfig=build.json
+          
+      - name: List built APKs
+        run: |
+          cd cordova-app
+          echo "=== Built APK files ==="
+          find platforms/android/app/build/outputs/apk -name "*.apk" -type f
+          
+      - name: Rename APK
+        run: |
+          cd cordova-app
+          if [ -f "platforms/android/app/build/outputs/apk/release/app-release-unsigned.apk" ]; then
+            cp platforms/android/app/build/outputs/apk/release/app-release-unsigned.apk ../school-management-unsigned.apk
+          elif [ -f "platforms/android/app/build/outputs/apk/release/app-release.apk" ]; then
+            cp platforms/android/app/build/outputs/apk/release/app-release.apk ../school-management-signed.apk
+          elif [ -f "platforms/android/app/build/outputs/apk/debug/app-debug.apk" ]; then
+            cp platforms/android/app/build/outputs/apk/debug/app-debug.apk ../school-management-debug.apk
+          fi
+          cd ..
+          ls -lh *.apk || echo "No APK found in root"
+          
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-apk
+          path: |
+            school-management-*.apk
+          retention-days: 30
+          
+      - name: Create Release
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v1.0.${{ github.run_number }}
+          name: Release v1.0.${{ github.run_number }}
+          body: |
+            ## School Management System APK
+            
+            This is an automated build of the School Management System Android app.
+            
+            ### 📱 Installation
+            1. Download the APK file below
+            2. Enable "Install from Unknown Sources" on your Android device
+            3. Install the APK
+            4. Configure your server URL when you first open the app
+            
+            ### ⚙️ Configuration
+            When you first open the app, you'll need to enter your backend server URL (e.g., https://your-server.com).
+            
+            ### 📋 Build Information
+            - Build Number: ${{ github.run_number }}
+            - Commit: ${{ github.sha }}
+            - Branch: ${{ github.ref_name }}
+          files: |
+            school-management-*.apk
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
