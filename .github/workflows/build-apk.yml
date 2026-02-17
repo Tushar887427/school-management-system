@@ -245,10 +245,16 @@ jobs:
           cd cordova-app
           cordova build android --verbose
           
-      - name: Build signed APK (if secrets available)
-        if: secrets.ANDROID_KEYSTORE_BASE64 != ''
+      - name: Build signed APK (if secrets configured)
+        continue-on-error: true
         run: |
           cd cordova-app
+          
+          # Check if keystore secret is available
+          if [ -z "${{secrets.ANDROID_KEYSTORE_BASE64 }}" ]; then
+            echo "Keystore secret not configured, skipping signed build"
+            exit 0
+          fi
           
           # Decode keystore
           echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > release.keystore
