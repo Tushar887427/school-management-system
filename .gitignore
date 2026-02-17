@@ -1,0 +1,33 @@
+# Cordova Build Artifacts
+cordova-app/
+*.apk
+*.aab
+
+# Node modules
+node_modules/
+
+# OS Files
+.DS_Store
+Thumbs.db
+
+# IDE Files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Temporary files
+*.tmp
+*.temp
+*.log
+
+# Build artifacts
+/output/
+/build/
+
+# Keystore files (NEVER commit these!)
+*.keystore
+*.jks
+keystore.properties
+keystore-base64.txt

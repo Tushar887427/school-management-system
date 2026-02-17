@@ -1,0 +1,340 @@
+name: Build Android APK
+
+on:
+  push:
+    branches:
+      - main
+      - master
+      - 'copilot/**'  # Allow testing from copilot feature branches
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'App version (e.g., 1.0.0)'
+        required: false
+        default: '1.0.0'
+
+env:
+  APP_NAME: "SchoolManagement"
+  APP_ID: "com.schoolmanagement.app"
+  APP_VERSION: ${{ github.event.inputs.version || '1.0.0' }}
+  CORDOVA_VERSION: "12.0.0"
+
+jobs:
+  build:
+    name: Build Android APK
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18.x'
+          cache: 'npm'
+
+      - name: Setup Java JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '11'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          cmdline-tools-version: '9477386'
+          packages: 'platform-tools platforms;android-31 build-tools;31.0.0'
+
+      - name: Install Cordova
+        run: |
+          npm install -g cordova@${CORDOVA_VERSION}
+          cordova --version
+
+      - name: Create Cordova project
+        run: |
+          echo "Creating Cordova project..."
+          cordova create cordova-app ${APP_ID} ${APP_NAME}
+          cd cordova-app
+          
+          echo "Adding Android platform..."
+          cordova platform add android@12.0.0
+          
+          echo "Cordova project structure created successfully"
+
+      - name: Copy web application files
+        run: |
+          echo "Copying web application files to Cordova www directory..."
+          cd cordova-app
+          
+          # Remove default Cordova www content
+          rm -rf www/*
+          
+          # Copy all PHP application files
+          cp -r ../!(cordova-app|.git|.github|docs) www/ || true
+          
+          # Ensure index files exist
+          if [ ! -f www/index.php ] && [ ! -f www/index.html ]; then
+            echo "Warning: No index file found. Creating placeholder..."
+            echo '<!DOCTYPE html><html><head><title>${APP_NAME}</title></head><body><h1>School Management System</h1><p>Loading...</p></body></html>' > www/index.html
+          fi
+          
+          echo "Files copied successfully"
+          ls -la www/
+
+      - name: Configure Cordova app
+        run: |
+          cd cordova-app
+          
+          # Check if custom config exists in root
+          if [ -f ../cordova-config.xml ]; then
+            echo "Using custom Cordova configuration..."
+            cp ../cordova-config.xml config.xml
+          else
+            echo "Creating default Cordova configuration..."
+            cat > config.xml << EOF
+          <?xml version='1.0' encoding='utf-8'?>
+          <widget id="${APP_ID}" version="${APP_VERSION}" xmlns="http://www.w3.org/ns/widgets" xmlns:cdv="http://cordova.apache.org/ns/1.0">
+              <name>${APP_NAME}</name>
+              <description>
+                  School Management System - Manage students, teachers, and administrative tasks efficiently
+              </description>
+              <author email="support@schoolmanagement.com" href="https://github.com/${{ github.repository }}">
+                  ${{ github.repository_owner }}
+              </author>
+              <content src="index.php" />
+              <access origin="*" />
+              <allow-intent href="http://*/*" />
+              <allow-intent href="https://*/*" />
+              <allow-intent href="tel:*" />
+              <allow-intent href="sms:*" />
+              <allow-intent href="mailto:*" />
+              <allow-intent href="geo:*" />
+              <preference name="ScrollEnabled" value="false" />
+              <preference name="android-minSdkVersion" value="24" />
+              <preference name="android-targetSdkVersion" value="31" />
+              <preference name="BackupWebStorage" value="none" />
+              <preference name="SplashMaintainAspectRatio" value="true" />
+              <preference name="FadeSplashScreenDuration" value="300" />
+              <preference name="SplashShowOnlyFirstTime" value="false" />
+              <preference name="SplashScreen" value="screen" />
+              <preference name="SplashScreenDelay" value="3000" />
+              <platform name="android">
+                  <edit-config file="app/src/main/AndroidManifest.xml" mode="merge" target="/manifest/application" xmlns:android="http://schemas.android.com/apk/res/android">
+                      <application android:networkSecurityConfig="@xml/network_security_config" />
+                      <application android:usesCleartextTraffic="true" />
+                  </edit-config>
+                  <resource-file src="resources/android/xml/network_security_config.xml" target="app/src/main/res/xml/network_security_config.xml" />
+                  <allow-intent href="market:*" />
+              </platform>
+          </widget>
+          EOF
+          fi
+          
+          # Create network security config for Android
+          mkdir -p resources/android/xml
+          cat > resources/android/xml/network_security_config.xml << EOF
+          <?xml version="1.0" encoding="utf-8"?>
+          <network-security-config>
+              <base-config cleartextTrafficPermitted="true">
+                  <trust-anchors>
+                      <certificates src="system" />
+                  </trust-anchors>
+              </base-config>
+          </network-security-config>
+          EOF
+          
+          echo "Configuration completed"
+          cat config.xml
+
+      - name: Decode keystore
+        if: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
+        run: |
+          echo "Decoding keystore from secrets..."
+          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 --decode > /tmp/keystore.jks
+          echo "Keystore decoded successfully"
+          ls -lh /tmp/keystore.jks
+
+      - name: Build Android APK (unsigned)
+        if: ${{ secrets.ANDROID_KEYSTORE_BASE64 == '' }}
+        run: |
+          cd cordova-app
+          echo "Building unsigned APK..."
+          cordova build android --release
+          
+          # Find and copy APK
+          find platforms/android/app/build/outputs/apk -name "*.apk" -type f
+          mkdir -p ../output
+          find platforms/android/app/build/outputs/apk -name "*.apk" -type f -exec cp {} ../output/app-unsigned.apk \;
+          
+          echo "Unsigned APK built successfully"
+          ls -lh ../output/
+
+      - name: Build and sign Android APK
+        if: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
+        run: |
+          cd cordova-app
+          echo "Building and signing APK..."
+          
+          # Build release APK with signing configuration
+          cordova build android --release -- \
+            --keystore=/tmp/keystore.jks \
+            --storePassword="${{ secrets.ANDROID_KEYSTORE_PASSWORD }}" \
+            --alias="${{ secrets.ANDROID_KEY_ALIAS }}" \
+            --password="${{ secrets.ANDROID_KEY_PASSWORD }}" \
+            --packageType=apk
+          
+          # Find and copy signed APK
+          find platforms/android/app/build/outputs/apk -name "*.apk" -type f
+          mkdir -p ../output
+          find platforms/android/app/build/outputs/apk/release -name "*.apk" -type f -exec cp {} ../output/app-signed.apk \;
+          
+          echo "Signed APK built successfully"
+          ls -lh ../output/
+
+      - name: Verify APK signature
+        if: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
+        run: |
+          echo "Verifying APK signature..."
+          jarsigner -verify -verbose -certs output/app-signed.apk
+          echo "APK signature verified successfully"
+
+      - name: Rename APK with version
+        run: |
+          cd output
+          if [ -f app-signed.apk ]; then
+            mv app-signed.apk school-management-v${APP_VERSION}-signed.apk
+          elif [ -f app-unsigned.apk ]; then
+            mv app-unsigned.apk school-management-v${APP_VERSION}-unsigned.apk
+          fi
+          ls -lh
+          
+          # Get APK info
+          echo "APK_FILE=$(ls school-management-*.apk)" >> $GITHUB_ENV
+          echo "APK_PATH=output/$(ls school-management-*.apk)" >> $GITHUB_ENV
+
+      - name: Upload APK as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-apk
+          path: ${{ env.APK_PATH }}
+          retention-days: 30
+
+      - name: Get commit info
+        id: commit
+        run: |
+          echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+          echo "commit_message=$(git log -1 --pretty=%B | head -n 1)" >> $GITHUB_OUTPUT
+          echo "commit_author=$(git log -1 --pretty=%an)" >> $GITHUB_OUTPUT
+          echo "commit_date=$(git log -1 --pretty=%cd --date=format:'%Y-%m-%d %H:%M')" >> $GITHUB_OUTPUT
+
+      - name: Create Release
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v${{ env.APP_VERSION }}-${{ steps.commit.outputs.sha_short }}
+          name: School Management System v${{ env.APP_VERSION }}
+          body: |
+            ## 📱 School Management System - Android APK Release
+            
+            ### Version: ${{ env.APP_VERSION }}
+            
+            **Build Information:**
+            - **Commit:** ${{ steps.commit.outputs.sha_short }}
+            - **Branch:** ${{ github.ref_name }}
+            - **Author:** ${{ steps.commit.outputs.commit_author }}
+            - **Date:** ${{ steps.commit.outputs.commit_date }}
+            - **Signed:** ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' && 'Yes ✅' || 'No ⚠️' }}
+            
+            **Commit Message:**
+            ```
+            ${{ steps.commit.outputs.commit_message }}
+            ```
+            
+            ### 📥 Installation Instructions
+            
+            1. Download the APK file below
+            2. Transfer to your Android device
+            3. Enable "Install from Unknown Sources" in Android settings
+            4. Open the APK file to install
+            5. Launch the School Management System app
+            
+            ### ⚠️ Important Notes
+            
+            - This APK wraps the PHP web application using Apache Cordova
+            - **The app requires a backend server to function properly**
+            - For full functionality, configure the app to connect to your PHP backend server
+            - See the [APK Build Guide](https://github.com/${{ github.repository }}/blob/main/docs/APK_BUILD_GUIDE.md) for more details
+            
+            ### 🔧 System Requirements
+            
+            - Android 7.0 (API Level 24) or higher
+            - Minimum 50MB free storage
+            - Internet connection required for backend connectivity
+            
+            ### 📚 Documentation
+            
+            - [Setup Guide](https://github.com/${{ github.repository }}/blob/main/docs/APK_BUILD_GUIDE.md)
+            - [Troubleshooting](https://github.com/${{ github.repository }}/blob/main/docs/APK_BUILD_GUIDE.md#troubleshooting)
+            - [FAQ](https://github.com/${{ github.repository }}/blob/main/docs/APK_BUILD_GUIDE.md#faq)
+            
+            ---
+            
+            Built with ❤️ using GitHub Actions and Apache Cordova
+          files: |
+            ${{ env.APK_PATH }}
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build summary
+        run: |
+          echo "## 🎉 Android APK Build Complete!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Build Details" >> $GITHUB_STEP_SUMMARY
+          echo "- **App Name:** ${APP_NAME}" >> $GITHUB_STEP_SUMMARY
+          echo "- **App ID:** ${APP_ID}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Version:** ${APP_VERSION}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Cordova Version:** ${CORDOVA_VERSION}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Signed:** ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' && 'Yes ✅' || 'No ⚠️' }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### APK Information" >> $GITHUB_STEP_SUMMARY
+          echo "- **File:** ${APK_FILE}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Size:** $(ls -lh ${APK_PATH} | awk '{print $5}')" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [ "${{ github.event_name }}" == "push" ]; then
+            echo "### 📥 Download" >> $GITHUB_STEP_SUMMARY
+            echo "The APK has been uploaded to the [Releases](https://github.com/${{ github.repository }}/releases) page." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### 📥 Download" >> $GITHUB_STEP_SUMMARY
+            echo "The APK is available as a workflow artifact. Click on the workflow run to download it." >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### ⚠️ Important Notes" >> $GITHUB_STEP_SUMMARY
+          echo "- This APK wraps the PHP web application using Apache Cordova" >> $GITHUB_STEP_SUMMARY
+          echo "- PHP requires a server to execute - the app will need to connect to a backend server" >> $GITHUB_STEP_SUMMARY
+          echo "- Configure the app to point to your hosted PHP backend" >> $GITHUB_STEP_SUMMARY
+          echo "- See the [APK Build Guide](docs/APK_BUILD_GUIDE.md) for detailed setup instructions" >> $GITHUB_STEP_SUMMARY
+          
+          if [ "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" == "" ]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### ⚠️ Signing Warning" >> $GITHUB_STEP_SUMMARY
+            echo "This APK is **unsigned** and cannot be published to Google Play Store." >> $GITHUB_STEP_SUMMARY
+            echo "To create a signed APK, please set up the following GitHub Secrets:" >> $GITHUB_STEP_SUMMARY
+            echo "- ANDROID_KEYSTORE_BASE64" >> $GITHUB_STEP_SUMMARY
+            echo "- ANDROID_KEYSTORE_PASSWORD" >> $GITHUB_STEP_SUMMARY
+            echo "- ANDROID_KEY_ALIAS" >> $GITHUB_STEP_SUMMARY
+            echo "- ANDROID_KEY_PASSWORD" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Cleanup
+        if: always()
+        run: |
+          echo "Cleaning up temporary files..."
+          rm -f /tmp/keystore.jks
+          echo "Cleanup completed"
