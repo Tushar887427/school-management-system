@@ -111,9 +111,6 @@ if [ ! -d "$CORDOVA_DIR" ]; then
     cordova create "$CORDOVA_DIR" "$APP_ID" "$APP_NAME"
     cd "$CORDOVA_DIR"
     
-    # Disable telemetry
-    cordova telemetry off
-    
     # Add Android platform
     echo -e "${BLUE}Adding Android platform...${NC}"
     cordova platform add android@latest

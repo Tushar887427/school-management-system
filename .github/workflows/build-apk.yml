@@ -38,7 +38,6 @@ jobs:
       - name: Install Cordova
         run: |
           npm install -g cordova@latest
-          cordova telemetry off
           
       - name: Create Cordova project
         run: |
