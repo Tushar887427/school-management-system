@@ -194,6 +194,12 @@ The APK includes:
 
 ## 🐛 Troubleshooting
 
+### Build Fails with "Source path does not exist: res/icon/android/hdpi.png"
+- This error means Cordova is looking for icon files that don't exist
+- **Solution**: The workflow has been updated to use default Cordova icons
+- If you want custom icons, create the icon files in the cordova-app/res/icon/android/ directory before building
+- Icon sizes needed: ldpi (36x36), mdpi (48x48), hdpi (72x72), xhdpi (96x96), xxhdpi (144x144), xxxhdpi (192x192)
+
 ### Build Fails with "Android SDK not found"
 - Install Android Studio and Android SDK
 - Set `ANDROID_HOME` environment variable
